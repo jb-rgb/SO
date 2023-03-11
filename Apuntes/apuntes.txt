@@ -1,14 +1,1 @@
-Tareas de un sistema operativo:
-- Administrar procesos
-- Administrar memoria
-- Administrar dispositivos de entrada y salida
-- Administra el sistema de archivos
-
-Un sistema operativo sirve para administrar los recursos de la computadora.
-
-El sistema operativo trabaja internmente para los procesos.
-
-SO -> monoproceso o multiploceso
-SO -> monousuario o multiusuario
-
-El proceso en ser creado era 'init'. Actualmente se llama Systemd.
+apuntes.txt
