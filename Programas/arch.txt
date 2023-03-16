@@ -1,0 +1,10 @@
+total 80K
+-rw-rw-r-- 1 balderik balderik 244 mar 13 17:38 archivo.c
+-rwxrwxr-x 1 balderik balderik 16K mar 13 17:33 archivo.exe
+-rw------- 1 balderik balderik   0 mar 14 17:16 arch.txt
+-rw-rw-r-- 1 balderik balderik 523 mar 13 17:46 ejercicio1.c
+-rwxrwxr-x 1 balderik balderik 16K mar 13 17:47 ejercicio.exe
+-rw-rw-r-- 1 balderik balderik 178 mar  8 17:11 paramatros.c
+-rwxrwxr-x 1 balderik balderik 16K mar  8 17:11 parametros.exe
+-rw-rw-r-- 1 balderik balderik 552 mar  9 17:48 proceso.c
+-rwxrwxr-x 1 balderik balderik 16K mar  9 17:44 proceso.exe
