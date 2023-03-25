@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/wait.h>
 
-#define MAX_LINE_LENGTH 1024
 #define MAX_ARGS 64
+#define MAX_LINE_LENGTH 1024
 
 int main()
 {
@@ -23,28 +23,28 @@ int main()
 
     while (1)
     {
-        // imprimir el prompt y leer la entrada del usuario
+        // Mostrar el prompt y leer la entrada del usuario
         printf("> ");
         fflush(stdout);
         fgets(input, MAX_LINE_LENGTH, stdin);
 
-        // eliminar el carácter de nueva línea final
+        // Eliminar el carácter de nueva línea final
         input[strcspn(input, "\n")] = 0;
 
-        // salir del bucle si el usuario ingresa "exit"
+        // Salir del bucle si el usuario ingresa "exit"
         if (strcmp(input, "exit") == 0)
         {
             break;
         }
 
-        // analizar la línea de entrada en argumentos
+        // Analizar la línea de entrada en argumentos
         i = 0;
         arg = strtok(input, " ");
         while (arg != NULL)
         {
             if (strcmp(arg, "<") == 0)
             {
-                // redirigir la entrada desde un archivo
+                // Redirigir la entrada desde un archivo
                 input_redirect = 1;
                 arg = strtok(NULL, " ");
                 input_file = arg;
@@ -52,118 +52,147 @@ int main()
             }
             else if (strcmp(arg, ">") == 0)
             {
-                // redirigir la salida hacia un archivo
+                // Redirigir la salida hacia un archivo
                 output_redirect = 1;
                 arg = strtok(NULL, " ");
                 output_file = arg;
                 arg = strtok(NULL, " ");
             }
+            else if (strcmp(arg, "|") == 0)
+            {
+                // Ejecutar dos comandos separados por una tubería
+                arg = strtok(NULL, " ");
+
+                // Crear la tubería
+                if (pipe(pipefd) == -1)
+                {
+                    perror("pipe");
+                    exit(EXIT_FAILURE);
+                }
+
+                // Crear el primer proceso hijo
+                pid = fork();
+                if (pid == -1)
+                {
+                    perror("fork");
+                    exit(EXIT_FAILURE);
+                }
+                else if (pid == 0)
+                {
+                    // El primer proceso hijo ejecuta el primer comando y escribe su salida en la tubería
+                    close(pipefd[0]);               // Cierra el extremo de lectura de la tubería
+                    dup2(pipefd[1], STDOUT_FILENO); // Redirige la salida estándar al extremo de escritura de la tubería
+                    close(pipefd[1]);               // Cierra el extremo de escritura de la tubería
+
+                    // Ejecuta el primer comando
+                    args[i] = NULL;
+                    if (input_redirect)
+                    {
+                        freopen(input_file, "r", stdin);
+                    }
+                    if (output_redirect)
+                    {
+                        freopen(output_file, "w", stdout);
+                    }
+                    execvp(args[0], args);
+                    perror(args[0]);
+                    exit(EXIT_FAILURE);
+                }
+
+                // Crear el segundo proceso hijo
+                pid = fork();
+                if (pid == -1)
+                {
+                    perror("fork");
+                    exit(EXIT_FAILURE);
+                }
+                else if (pid == 0)
+                {
+                    // El segundo proceso hijo ejecuta el segundo comando y lee su entrada desde la tubería
+                    close(pipefd[1]);              // Cierra el extremo de escritura de la tubería
+                    dup2(pipefd[0], STDIN_FILENO); // Redirige la entrada estándar
+                    close(pipefd[0]);              // Cierra el extremo de lectura de la tubería
+
+                    // Ejecuta el segundo comando
+                    args[i] = arg;
+                    j = i;
+                    while (args[j] != NULL)
+                    {
+                        j++;
+                        arg = strtok(NULL, " ");
+                        args[j] = arg;
+                    }
+                    if (input_redirect)
+                    {
+                        freopen(input_file, "r", stdin);
+                    }
+                    if (output_redirect)
+                    {
+                        freopen(output_file, "w", stdout);
+                    }
+                    execvp(args[i], &args[i]);
+                    perror(args[i]);
+                    exit(EXIT_FAILURE);
+                }
+
+                // Espera a que los dos procesos hijos terminen
+                close(pipefd[0]);
+                close(pipefd[1]);
+                waitpid(-1, &status, 0);
+                waitpid(-1, &status, 0);
+
+                // Restablecer las variables de redirección
+                input_redirect = 0;
+                output_redirect = 0;
+                input_file = NULL;
+                output_file = NULL;
+
+                // Leer el siguiente argumento
+                arg = strtok(NULL, " ");
+            }
             else
             {
-                args[i++] = arg;
+                // Añadir el argumento a la lista de argumentos
+                args[i] = arg;
+                i++;
                 arg = strtok(NULL, " ");
             }
         }
         args[i] = NULL;
 
-        // buscar la tubería de comandos
-        j = 0;
-        while (args[j] != NULL)
-        {
-            if (strcmp(args[j], "|") == 0)
-            {
-                // dividir los argumentos en dos listas separadas
-                args[j] = NULL;
-                char **args2 = &args[j + 1];
-
-                // crear la tubería
-                pipe(pipefd);
-
-                // crear un proceso hijo para ejecutar el segundo comando
-                pid = fork();
-                if (pid == 0)
-                {
-                    // cerrar la entrada estándar y redirigir la entrada desde la tubería
-                    close(STDIN_FILENO);
-                    dup(pipefd[0]);
-                    close(pipefd[0]);
-                    close(pipefd[1]);
-
-                    // ejecutar el segundo comando
-                    execvp(args2[0], args2);
-                    perror("execvp");
-                    exit(EXIT_FAILURE);
-                }
-                else if (pid < 0)
-                {
-                    perror("fork");
-                }
-                else
-                {
-                    // cerrar la salida estándar y redirigir la salida hacia la tubería
-                    close(STDOUT_FILENO);
-                    dup(pipefd[1]);
-                    close(pipefd[0]);
-                    close(pipefd[1]);
-
-                    // ejecutar el primer comando
-                    execvp(args[0], args);
-                    perror("execvp");
-                    exit(EXIT_FAILURE);
-                }
-            }
-            j++;
-        }
-
-        // si no hay tubería, crear un proceso hijo y ejecutar el comando
+        // Crear un proceso hijo para ejecutar el comando
         pid = fork();
-        if (pid == 0)
+        if (pid == -1)
         {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        }
+        else if (pid == 0)
+        {
+            // El proceso hijo ejecuta el comando
             if (input_redirect)
             {
-                // abrir el archivo
-                FILE *fp = fopen(input_file, "r");
-                if (fp == NULL)
-                {
-                    perror("fopen");
-                    exit(EXIT_FAILURE);
-                }
-                close(STDIN_FILENO);
-                dup(fileno(fp));
-                fclose(fp);
+                freopen(input_file, "r", stdin);
             }
             if (output_redirect)
             {
-                // crear el archivo o sobrescribirlo si ya existe
-                FILE *fp = fopen(output_file, "w");
-                if (fp == NULL)
-                {
-                    perror("fopen");
-                    exit(EXIT_FAILURE);
-                }
-                close(STDOUT_FILENO);
-                dup(fileno(fp));
-                fclose(fp);
+                freopen(output_file, "w", stdout);
             }
-            // ejecutar el comando
             execvp(args[0], args);
-            perror("execvp");
+            perror(args[0]);
             exit(EXIT_FAILURE);
-        }
-        else if (pid < 0)
-        {
-            perror("fork");
         }
         else
         {
-            // esperar a que el proceso hijo termine
+            // El proceso padre espera a que el hijo termine
             waitpid(pid, &status, 0);
+
+            // Restablecer las variables de redirección
+            input_redirect = 0;
+            output_redirect = 0;
+            input_file = NULL;
+            output_file = NULL;
         }
-        // restablecer las variables para la próxima entrada
-        input_redirect = 0;
-        output_redirect = 0;
-        input_file = NULL;
-        output_file = NULL;
     }
 
     return 0;
