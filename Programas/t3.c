@@ -11,50 +11,97 @@
 
 #define MAX_LINE 1024 // The maximum length command
 
-//int should_run = 1;  // flag to determine when to exit program
-int should_wait = 1; // flag to determine if process should run in the background
+//bandera para esperar los procesos que aun no terminan
+int espera = 1;
+char * tokenize(char *entrada);
+void redireccion_salida(char *Archivo_nombre);
+void redireccion_entrada(char *Archivo_nombre);
+void crear_Tuberia(char *args[]);
 
-
-void redireccion_entrada(char *fileName)
+int main(void)
 {
-    int in = open(fileName, O_RDONLY);
-    dup2(in, 0);
-    close(in);
-}
+    char *args[MAX_LINE]; // command line arguments
+    
+    while (1) {
+        printf("$ ");
+        fflush(stdout);
 
 
-void redireccion_salida(char *fileName)
-{
-    int out = open(fileName, O_WRONLY | O_TRUNC | O_CREAT, 0600);
-    dup2(out, 1);
-    close(out);
-}
-
-/* 
-void run(char *args[])
-{
-    pid_t pid;
+        char prompt[MAX_LINE];
+        fgets(prompt, MAX_LINE, stdin);
+        char *tokens;
+        tokens = tokenize(prompt);
+         // Salir del bucle si el usuario ingresa "exit"
+        if (strcmp(tokens, "exit") == 0) {
+            break;
+        }
+        int a;
+        //printf("1%s",tokens);
+        char *arg = strtok(tokens, " ");
+        //printf("2 %s",arg);
+        int i = 0;
+        while (arg != NULL) {
+            if (strcmp(arg, "<") == 0) {
+                // printf("ENtrada \n");
+                redireccion_entrada(strtok(NULL, " "));//con strtok se le asigna el nombre del archivo, por que se toma el siguiente parametro
+            } else if (strcmp(arg, ">") == 0) {
+                // printf("salida \n");
+                redireccion_salida(strtok(NULL, " "));//con strtok se le asigna el nombre del archivo, por que se toma el siguiente parametro
+            } else if (strcmp(arg, "|") == 0) {
+                // printf("Tuberia \n");
+                args[i] = NULL;
+                crear_Tuberia(args);
+                i = 0;//iniciar desde 0 cuando se encuentra una tuberia , para que despues se ejecuten los comandos correspondientes 
+            } else {
+                args[i] = arg;//el comando se va a agregar al arreglo de comandos 
+                i++;//se incrementa la posicion 
+            }
+            arg = strtok(NULL, " ");
+        }
+        args[i] = NULL;
+  //ejecutar el proceso si no hay | , < , > 
+          pid_t pid;
     
             pid = fork();
-            if (pid < 0) { 
-                fprintf(stderr, "Fork Failed");
+            if (pid == -1) { 
+                perror("fork");
+                exit(EXIT_FAILURE);
             }
-            else if ( pid == 0) { //child process 
+            else if ( pid == 0) { //Se crea el proceso hijo
                 execvp(args[0], args);
+                perror(args[0]);
+                exit(EXIT_FAILURE);
             }
-            else { // parent process 
-                if (should_wait) {
+            else {//Si no es el proceso padre
+                if (espera) {
                     waitpid(pid, NULL, 0);
                 } else {
-                    should_wait = 0;
+                    espera = 0;
                 }
             }
             redireccion_entrada("/dev/tty");
             redireccion_salida("/dev/tty");
+    }
+    return 0;
 }
-*/
 
-void createPipe(char *args[])
+
+void redireccion_entrada(char *Archivo_nombre)
+{
+    int entrada = open(Archivo_nombre, O_RDONLY);
+    dup2(entrada, 0);
+    close(entrada);
+}
+
+
+void redireccion_salida(char *Archivo_nombre)
+{
+    int salida = open(Archivo_nombre, O_WRONLY | O_TRUNC | O_CREAT, 0600);
+    dup2(salida, 1);
+    close(salida);
+}
+
+void crear_Tuberia(char *args[])
 {
     int fd[2];
     pipe(fd);
@@ -67,17 +114,19 @@ void createPipe(char *args[])
       pid_t pid;
     
             pid = fork();
-            if (pid < 0) { 
-                fprintf(stderr, "Fork Failed");
-            }
-            else if ( pid == 0) { /* child process */
+             if (pid == -1) { 
+                perror("fork");
+                exit(EXIT_FAILURE);
+            }else if ( pid == 0) { /* child process */
                 execvp(args[0], args);
+                perror(args[0]);
+                exit(EXIT_FAILURE);
             }
             else { /* parent process */
-                if (should_wait) {
+                if (espera) {
                     waitpid(pid, NULL, 0);
                 } else {
-                    should_wait = 0;
+                    espera = 0;
                 }
             }
             redireccion_entrada("/dev/tty");
@@ -93,98 +142,29 @@ void createPipe(char *args[])
  * @param  *input the input string
  * @return tokenized the tokenized stirng
  */
-char *tokenize(char *input)
+char * tokenize(char *entrada)
 {
-    int i, j = 0;
-    char *tokenized = malloc(sizeof(char) * (strlen(input) + 1));
+    int i;
+    int j = 0;
+    char *tokenized = (char *)malloc((MAX_LINE * 2) * sizeof(char));
 
-    for (i = 0; input[i] != '\0'; i++) {
-        if (input[i] == '>' || input[i] == '<' || input[i] == '|') {
-            tokenized[j++] = ' ';
-            tokenized[j++] = input[i];
-            tokenized[j++] = ' ';
+    // add spaces around special characters
+    for (i = 0; i < strlen(entrada); i++) {
+        if (entrada[i] != '>' && entrada[i] != '<' && entrada[i] != '|') {
+            tokenized[j++] = entrada[i];
         } else {
-            tokenized[j++] = input[i];
+            tokenized[j++] = ' ';
+            tokenized[j++] = entrada[i];
+            tokenized[j++] = ' ';
         }
     }
-    tokenized[j] = '\0';
+    tokenized[j++] = '\0';
 
+    //poner el caracter null al final del arreglo 
     char *end;
     end = tokenized + strlen(tokenized) - 1;
     end--;
     *(end + 1) = '\0';
-
+    
     return tokenized;
-}
-
-/**
- * Runs a basic shell.
- * 
- * @return 0 upon completion
- */
-int main(void)
-{
-    char *args[MAX_LINE]; // command line arguments
-    
-    while (1) {
-        printf("MillerShell$ ");
-        fflush(stdout);
-
-        char input[MAX_LINE];
-        fgets(input, MAX_LINE, stdin);
-
-         // Salir del bucle si el usuario ingresa "exit"
-      
-
-        char *tokens;
-        tokens = tokenize(input);
-         // Salir del bucle si el usuario ingresa "exit"
-        if (strcmp(tokens, "exit") == 0) {
-            break;
-        }
-        int a;
-        //printf("1%s",tokens);
-        char *arg = strtok(tokens, " ");
-        //printf("2 %s",arg);
-        int i = 0;
-        while (arg != NULL) {
-            if (strcmp(arg, "<") == 0) {
-                printf("ENtrada \n");
-                redireccion_entrada(strtok(NULL, " "));
-            } else if (strcmp(arg, ">") == 0) {
-                printf("salida \n");
-                redireccion_salida(strtok(NULL, " "));
-            } else if (strcmp(arg, "|") == 0) {
-                printf("Tuberia \n");
-                args[i] = NULL;
-                createPipe(args);
-                i = 0;
-            } else {
-                args[i] = arg;
-                i++;
-            }
-            arg = strtok(NULL, " ");
-        }
-        args[i] = NULL;
-  
-          pid_t pid;
-    
-            pid = fork();
-            if (pid < 0) { 
-                fprintf(stderr, "Fork Failed");
-            }
-            else if ( pid == 0) { /* child process */
-                execvp(args[0], args);
-            }
-            else { /* parent process */
-                if (should_wait) {
-                    waitpid(pid, NULL, 0);
-                } else {
-                    should_wait = 0;
-                }
-            }
-            redireccion_entrada("/dev/tty");
-            redireccion_salida("/dev/tty");
-    }
-    return 0;
 }
