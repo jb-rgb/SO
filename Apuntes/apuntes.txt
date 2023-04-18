@@ -1,1 +1,3 @@
-apuntes.txt
+Condición de carrera: Es el fenómeno que se presenta cuando dos o más hilos manipulan un recurso compartido.
+
+Sección crítica: Es un bloque de código en donde se accede a recursos compartidos que no deben ser accedidos por más de un hilo.
